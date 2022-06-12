@@ -1,0 +1,94 @@
+1: /*
+2:  * Example with Functions
+3:  */
+4: 
+<CLASS>
+<id:example>
+<'{'>
+5: class example {
+6:   // constants
+<VAL>
+<id:a>
+<'='>
+<int:5>
+7:   val a = 5
+8: 
+9:   // variables
+<VAR>
+<id:c>
+<':'>
+<INT>
+10:   var c : int
+11: 
+12:   // function declaration
+<FUN>
+<id:add>
+<'('>
+<id:a>
+<':'>
+<INT>
+<','>
+<id:b>
+<':'>
+<INT>
+<')'>
+<':'>
+<INT>
+<'{'>
+13:   fun add (a: int, b: int) : int {
+<RETURN>
+<id:a>
+<'+'>
+<id:b>
+14:     return a+b
+<'}'>
+15:   }
+16:   
+17:   // main statements
+<FUN>
+<id:main>
+<'('>
+<')'>
+<'{'>
+18:   fun main() {
+<id:c>
+<'='>
+<id:add>
+<'('>
+<id:a>
+<','>
+<int:10>
+<')'>
+19:     c = add(a, 10)
+<IF>
+<'('>
+<id:c>
+<'>'>
+<int:10>
+<')'>
+20:     if (c > 10)
+<PRINT>
+<'-'>
+<id:c>
+21:       print -c
+<ELSE>
+22:     else
+<PRINT>
+<id:c>
+23:       print c
+<PRINTLN>
+<'('>
+<string:Hello World>
+<')'>
+24:     println ("Hello World")
+<'}'>
+25:   }
+<'}'>
+26: }
+Symbol Table:
+example
+a
+c
+add
+b
+main
