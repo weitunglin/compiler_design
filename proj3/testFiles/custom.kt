@@ -35,10 +35,22 @@ class Sigma
   }
 
   fun t(x: int, y: float, z: bool) {
-    if (true)
-      print ("not valid")
+    if (true) {
+      print ("valid1")
+      if (true) {
+        print ("valid2")
+      } else {
+        print ("valid3")
+        
+      }
+      print("a")
+    }
     else
       print ("else")
+
+    if (true) { 
+      print("ab")
+    }
     
     var c = add(n, 10)
     if (c > 10)

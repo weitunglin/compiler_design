@@ -38,9 +38,9 @@ string toDtypeString(int t) {
     } else if (t == _FLOAT) {
         return "float";
     } else if (t == _BOOL) {
-        return "bool";
+        return "boolean";
     } else if (t == _STRING) {
-        return "string";
+        return "java.lang.String";
     }
     return "";
 }

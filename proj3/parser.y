@@ -17,6 +17,7 @@ int stack_number = 0;
 // base for static variable name
 string class_name;
 // layers for condition, loop
+int last_index = -1;
 stack<int> layers;
 
 // parsing error and exit
@@ -116,7 +117,7 @@ expression:
             if ($1->dtype == _INT) {
                 os << "sipush " << std::to_string($1->ival);
             } else if ($1->dtype == _BOOL) {
-                os << "iconst_value_" << $1->bval ? "1" : "0";
+                os << "iconst_" << $1->bval ? "1" : "0";
             } else if ($1->dtype == _STRING) {
                 os << "ldc \"" << *$1->sval << "\"";
             }
@@ -279,6 +280,14 @@ expression:
             yyerror("> with wrong dtype");
         }
         $$ = d;
+        os << getT() << "isub" << endl;
+        layers.push(++last_index);
+        os << getT() << "ifgt L_" << layers.top() << endl;
+        os << getT() << "iconst_0" << endl;
+        os << getT() << "goto L_" << layers.top() << "_end" << endl;
+        os << "L_" << layers.top() << ":" << endl;
+        os << getT() << "iconst_1" << endl;
+        os << "L_" << layers.top() << "_end:" << endl;
     }
     | expression '<' expression
     {
@@ -558,7 +567,7 @@ function_call:
         }
         
         $$ = d;
-        os << getT() << "invokevirtual ";
+        os << getT() << "invokestatic ";
         if (d->return_dtype == -1) {
             os << "void";
         } else {
@@ -708,14 +717,6 @@ var_declaration:
             }
             os << endl;
         } else {
-            // os << getT();
-            // if ($6->dtype == _INT) {
-            //     os << "sipush " << std::to_string($6->ival);
-            // } else if ($6->dtype == _BOOL) {
-            //     os << "iconst_value_" << $6->bval ? "1" : "0";
-            // }
-            // os << endl;
-            // os << getT() << "istore " << stack_number++ << endl;
             d->val->id = stack_number;
             os << getT() << "istore " << stack_number << endl;
             stack_number++;
@@ -809,19 +810,25 @@ statement:
     {
         trace("statement loop");
     }
-    | PRINT expression
+    | PRINT
+    {
+        os << getT() << "getstatic java.io.PrintStream java.lang.System.out" << endl;
+    }
+    expression
     {
         trace("statement print");
-        os << getT() << "getstatic java.io.PrintStream java.lang.System.out" << endl;
         os << getT() << "invokevirtual void java.io.PrintStream.print(";
-        os << toDtypeString($2->dtype) << ")" << endl;
+        os << toDtypeString($3->dtype) << ")" << endl;
     }
-    | PRINTLN expression
+    | PRINTLN
+    {
+        os << getT() << "getstatic java.io.PrintStream java.lang.System.out" << endl;
+    }
+    expression
     {
         trace("statement println");
-        os << getT() << "getstatic java.io.PrintStream java.lang.System.out" << endl;
         os << getT() << "invokevirtual void java.io.PrintStream.println(";
-        os << toDtypeString($2->dtype) << ")" << endl;
+        os << toDtypeString($3->dtype) << ")" << endl;
     }
     | READ expression
     {
@@ -891,6 +898,7 @@ function_declaration:
             yyerror("wrong function closing");
         }
         os << getT() << "}" << endl;
+        stack_number = 0;
     }
     | FUN ID '(' function_parameters ')' ':' type
     {
@@ -983,30 +991,37 @@ condition:
     IF expression
     {
         // check if the expression if boolean expression
-        trace($2->dtype);
-        trace($2->type);
         if (!($2->dtype == _BOOL)) {
             yyerror("condition without bool expression");
         }
+        layers.push(++last_index);
+        // os << getT() << "iconst_0" << endl;
+        os << getT() << "ifeq L_" << std::to_string(layers.top()) << "_false" << endl;
     }
     condition_body
-    ELSE
-    condition_body
     {
+        os << getT() << "goto L_" << std::to_string(layers.top()) << "_end" << endl;
         trace("condition if else");
     }
-    | IF expression
+    condition_else
+    ;
+
+condition_else:
+    ELSE
     {
-        // check if the expression if boolean expression
-        trace($2->dtype);
-        trace($2->type);
-        if (!($2->dtype == _BOOL)) {
-            yyerror("condition without bool expression");
-        }
+        os << "L_" << std::to_string(layers.top()) << "_false:" << endl;
     }
     condition_body
     {
-        trace("condition if");
+        os << "L_" << std::to_string(layers.top()) << "_end:" << endl;
+        // os << getT() << "nop" << endl;
+        layers.pop();
+    }
+    |
+    {
+        os << "L_" << std::to_string(layers.top()) << "_false:" << endl;
+        // os << getT() << "nop" << endl;
+        layers.pop();
     }
     ;
 
@@ -1014,7 +1029,7 @@ condition_body:
     '{'
     statements
     '}'
-    | statements
+    | statement
     ;
 
 // loop
