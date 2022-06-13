@@ -7,13 +7,15 @@ class Sigma
 {
   // constants and variables
   val n = 10
-  var sum: int
+  var sum: int = 0
   var index: int
+
+  var q = 5
 
   fun main () {
     sum = 0
     index = 0
-    val r = 5
+    var r = 5
     
     while (index <= n) {
       sum = sum + index
@@ -23,15 +25,16 @@ class Sigma
     println (sum)
   }
 
-  val q = 5
-  var a
-
   // function declaration
   fun add (a: int, b: int) : int {
     return a+b
   }
 
-  fun t() {
+  fun sub (c: int, d: int) : int {
+    return c - d
+  }
+
+  fun t(x: int, y: float, z: bool) {
     if (true)
       print ("not valid")
     else

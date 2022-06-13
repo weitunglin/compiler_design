@@ -34,13 +34,13 @@ const int _CLASS = 4;
 
 string toDtypeString(int t) {
     if (t == _INT) {
-        return "INT";
+        return "int";
     } else if (t == _FLOAT) {
-        return "FLOAT";
+        return "float";
     } else if (t == _BOOL) {
-        return "BOOL";
+        return "bool";
     } else if (t == _STRING) {
-        return "STRING";
+        return "string";
     }
     return "";
 }
@@ -69,6 +69,8 @@ public:
 
     int dtype;
     int type;
+    
+    int id;
 
     SymbolValue() {}
     SymbolValue(const SymbolValue& rhs) : dtype(rhs.dtype), type(rhs.type),
@@ -165,27 +167,35 @@ public:
         }
     }
 
-    SymbolEntry* lookup(string name, int type) {
+    SymbolEntry* lookup(string name, int type, bool in_global = false) {
         vector<SymbolTable*> t;
         SymbolEntry* result = NULL;
-        while (!tables.empty()) {
-            auto top = tables.top();
+        if (!tables.size()) {
+            return NULL;
+        }
+        SymbolTable* top;
+        if (!in_global) {
+            top = tables.top();
             result = top->lookup(name, type);
             if (result != NULL) {
-                while (!t.empty()) {
-                    tables.push(t.back());
-                    t.pop_back();
-                }
                 return result;
             }
+        }
+        while (!tables.empty()) {
+            top = tables.top();
             t.push_back(top);
             tables.pop();
         }
+        result = top->lookup(name, type);
         while (!t.empty()) {
             tables.push(t.back());
             t.pop_back();
         }
-        return NULL;
+        return result;
+    }
+
+    bool inGlobal() {
+        return tables.size() == 1;
     }
 };
 #endif

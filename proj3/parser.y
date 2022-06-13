@@ -1,6 +1,6 @@
 %{
 // option for print trace output
-#define DEBUG 0
+#define DEBUG 1
 // print trace output
 #define trace(t) if (DEBUG) { cout << "trace: " << t << endl; }
 
@@ -10,12 +10,21 @@
 // entire symbol tables
 SymbolTables *tables = new SymbolTables();
 
+// used for generating java byte code
 ofstream os;
+// used for local variable stack counter
+int stack_number = 0;
+// base for static variable name
+string class_name;
+// layers for condition, loop
+stack<int> layers;
 
 // parsing error and exit
 void yyerror(string);
 // inserting symbol into symbol tables
 void insertSymbolEntry(SymbolEntry* entry);
+// getting tab size in output jasm
+string getT(void);
 %}
 
 %union {
@@ -73,6 +82,7 @@ program:
         trace("declare class: " + *$2);
         insertSymbolEntry(new SymbolEntry(*$2, _CLASS));
         os << "class " << *$2 << endl << "{" << endl;
+        class_name = *$2;
     }
     '{'program_body
     
@@ -101,6 +111,17 @@ expression:
     {
         trace("expression literal");
         $$ = new SymbolValue(*$1);
+        if (!tables->inGlobal()) {
+            os << getT();
+            if ($1->dtype == _INT) {
+                os << "sipush " << std::to_string($1->ival);
+            } else if ($1->dtype == _BOOL) {
+                os << "iconst_value_" << $1->bval ? "1" : "0";
+            } else if ($1->dtype == _STRING) {
+                os << "ldc \"" << *$1->sval << "\"";
+            }
+            os << endl;
+        }
     }
     | ID '=' function_call
     {
@@ -115,7 +136,15 @@ expression:
         if (d1->val->dtype != d->dtype) {
             yyerror("assign without same type");
         }
-        // TODO assign value to d1
+        
+        d1 = tables->lookup(*$1, _VAR, true);
+        if (d1 != NULL) {
+            // global var
+            os << getT() << "putstatic " << toDtypeString($3->return_dtype) << " " << class_name << "." << *$1 << endl;
+        } else {
+            // local var
+            os << getT() << "istore " << std::to_string(d1->val->id) << endl;
+        }
         $$ = d;
     }
     | function_call
@@ -139,36 +168,43 @@ expression:
     }
     | ID
     {
-        trace("expression id");
-        SymbolEntry *d = tables->lookup(*$1, _VAL);
+        trace("expression id" + *$1);
+        SymbolEntry *d = tables->lookup(*$1, _VAR);
         if (d == NULL) {
-            d = tables->lookup(*$1, _VAR);
+            d = tables->lookup(*$1, _VAL);
         }
         if (d == NULL) {
-            yyerror("undefined id");
+            yyerror("undefined id" + *$1);
         } else {
             $$ = d->val;
+        }
+        if (d->type == _VAL) {
+            if (d->val->dtype == _INT) {
+                os << getT() << "sipush " << std::to_string(d->val->ival) << endl;
+            } else if (d->val->dtype == _BOOL) {
+                os << getT() << "iconst_ " << (d->val->bval ? "1" : "0") << endl;
+            }
+        } else if (d->type == _VAR) {
+            if (tables->lookup(*$1, _VAR, true)) {
+                // global var
+                os << getT() << "getstatic " << toDtypeString(d->val->dtype) << " "
+                << class_name << "." << d->name << endl;
+            } else {
+                // local var
+                os << getT() << "iload " << d->val->id << endl;
+            }
         }
     }
     | expression '+' expression
     {
         trace("expression + expression");
-        SymbolValue *d;
-        if ($1->dtype == _INT || $1->dtype == _FLOAT || $3->dtype == _INT || $3->dtype == _FLOAT) {
-            float v1, v2;
-            if ($1->dtype == _INT) {
-                v1 = $1->ival;
-            } else {
-                v1 = $1->fval;
-            }
-
-            if ($3->dtype == _INT) {
-                v2 = $3->ival;
-            } else {
-                v2 = $3->fval;
-            }
-
-            d = new SymbolValue($1->dtype | $3->dtype, _VAR, v1 + v2);
+        SymbolValue *d = new SymbolValue();
+        if ($1->dtype == _INT && $3->dtype == _INT) {
+            d->dtype = _INT;
+            int v1, v2;
+            v1 = $1->ival;
+            v2 = $3->ival;
+            os << getT() << "iadd" << endl;
         } else {
             yyerror("add arithmetic with unsupported type");
         }
@@ -177,22 +213,13 @@ expression:
     | expression '-' expression
     {
         trace("expression - expression");
-        SymbolValue *d;
-        if ($1->dtype == _INT || $1->dtype == _FLOAT || $3->dtype == _INT || $3->dtype == _FLOAT) {
-            float v1, v2;
-            if ($1->dtype == _INT) {
-                v1 = $1->ival;
-            } else {
-                v1 = $1->fval;
-            }
-
-            if ($3->dtype == _INT) {
-                v2 = $3->ival;
-            } else {
-                v2 = $3->fval;
-            }
-
-            d = new SymbolValue($1->dtype | $3->dtype, _VAR, v1 - v2);
+        SymbolValue *d = new SymbolValue();
+        if ($1->dtype == _INT && $3->dtype == _INT) {
+            d->dtype = _INT;
+            int v1, v2;
+            v1 = $1->ival;
+            v2 = $3->ival;
+            os << getT() << "isub" << endl;
         } else {
             yyerror("sub arithmetic with unsupported type");
         }
@@ -201,22 +228,13 @@ expression:
     | expression '*' expression
     {
         trace("expression * expression");
-        SymbolValue *d;
-        if ($1->dtype == _INT || $1->dtype == _FLOAT || $3->dtype == _INT || $3->dtype == _FLOAT) {
-            float v1, v2;
-            if ($1->dtype == _INT) {
-                v1 = $1->ival;
-            } else {
-                v1 = $1->fval;
-            }
-
-            if ($3->dtype == _INT) {
-                v2 = $3->ival;
-            } else {
-                v2 = $3->fval;
-            }
-
-            d = new SymbolValue($1->dtype | $3->dtype, _VAR, v1 * v2);
+        SymbolValue *d = new SymbolValue();
+        if ($1->dtype == _INT && $3->dtype == _INT) {
+            d->dtype = _INT;
+            int v1, v2;
+            v1 = $1->ival;
+            v2 = $3->ival;
+            os << getT() << "imul" << endl;
         } else {
             yyerror("mul arithmetic with unsupported type");
         }
@@ -225,22 +243,13 @@ expression:
     | expression '/' expression
     {
         trace("expression / expression");
-        SymbolValue *d;
-        if ($1->dtype == _INT || $1->dtype == _FLOAT || $3->dtype == _INT || $3->dtype == _FLOAT) {
-            float v1, v2;
-            if ($1->dtype == _INT) {
-                v1 = $1->ival;
-            } else {
-                v1 = $1->fval;
-            }
-
-            if ($3->dtype == _INT) {
-                v2 = $3->ival;
-            } else {
-                v2 = $3->fval;
-            }
-
-            d = new SymbolValue($1->dtype | $3->dtype, _VAR, v1 / v2);
+        SymbolValue *d = new SymbolValue();
+        if ($1->dtype == _INT && $3->dtype == _INT) {
+            d->dtype = _INT;
+            int v1, v2;
+            v1 = $1->ival;
+            v2 = $3->ival;
+            os << getT() << "idiv" << endl;
         } else {
             yyerror("mul arithmetic with unsupported type");
         }
@@ -438,7 +447,36 @@ expression:
         if ($2->dtype != _INT) {
             yyerror("- expression not INT");
         }
-        $$ = new SymbolValue(_INT, _VAR, -$2->ival);
+        os << getT() << "ineg" << endl;
+        $$ = new SymbolValue(_INT, _VAR, -($2->ival));
+    }
+    | expression '&' expression
+    {
+        trace("expression & expression");
+        if ($1->dtype != _BOOL || $3->dtype != _BOOL) {
+            yyerror("expression & expression not BOOL");
+        }
+        os << getT() << "iand" << endl;
+        $$ = new SymbolValue(_BOOL, _VAR, $1->bval & $3->bval);
+    }
+    | expression '|' expression
+    {
+        trace("expression | expression");
+        if ($1->dtype != _BOOL || $3->dtype != _BOOL) {
+            yyerror("expression | expression not BOOL");
+        }
+        os << getT() << "ior" << endl;
+        $$ = new SymbolValue(_BOOL, _VAR, $1->bval | $3->bval);
+    }
+    | '!' expression
+    {
+        trace("! expression");
+        if ($2->dtype != _BOOL) {
+            yyerror("! expression not BOOL");
+        }
+        os << getT() << "ldc 1" << endl;
+        os << getT() << "ixor" << endl;
+        $$ = new SymbolValue(_BOOL, _VAR, !$2->bval);
     }
     | '+' expression
     {
@@ -520,6 +558,20 @@ function_call:
         }
         
         $$ = d;
+        os << getT() << "invokevirtual ";
+        if (d->return_dtype == -1) {
+            os << "void";
+        } else {
+            os << toDtypeString(d->return_dtype);
+        }
+        os << " " << class_name << "." << d->name << "(";
+        for (size_t i = 0; i < $3->size(); i++) {
+            if (i != 0) {
+                os << ", ";
+            }
+            os << toDtypeString($3->at(i)->dtype);
+        }
+        os << ")" << endl;
     }
     ;
 
@@ -590,7 +642,7 @@ var_declarations:
 var_declaration:
     VAR ID
     {
-        trace("var decalaration with value");
+        trace("var decalaration without value and without type");
         SymbolEntry *d;
         d = tables->lookup(*$2, _ALL);
         if (d != NULL) {
@@ -598,6 +650,7 @@ var_declaration:
         }
         d = new SymbolEntry(*$2, _VAR);
         insertSymbolEntry(d);
+        yyerror("var decalaration without value and without type");
     }
     | VAR ID '=' expression
     {
@@ -610,6 +663,23 @@ var_declaration:
         d = new SymbolEntry(*$2, _VAR);
         d->val = $4;
         insertSymbolEntry(d);
+        if (tables->inGlobal()) {
+            os << getT() << "field static " << toDtypeString(d->val->dtype) << " " << *$2 << " = ";
+            if ($4->dtype == _BOOL) {
+                if ($4->bval) {
+                    os << "true";
+                } else {
+                    os << "false";
+                }
+            } else if ($4->dtype == _INT) {
+                os << std::to_string($4->ival);
+            }
+            os << endl;
+        } else {
+            d->val->id = stack_number;
+            os << getT() << "istore " << stack_number << endl;
+            stack_number++;
+        }
     }
 	| VAR ID ':' type '=' expression
     {
@@ -619,9 +689,37 @@ var_declaration:
         if (d != NULL) {
             yyerror("duplicate id");
         }
+        if ($4 != $6->dtype) {
+            yyerror("var decalaration with wrong type");
+        }
         d = new SymbolEntry(*$2, _VAR);
         d->val = $6;
         insertSymbolEntry(d);
+        if (tables->inGlobal()) {
+            os << "\tfield static " << toDtypeString(d->val->dtype) << " " << *$2 << " = ";
+            if ($6->dtype == _BOOL) {
+                if ($6->bval) {
+                    os << "true";
+                } else {
+                    os << "false";
+                }
+            } else if ($6->dtype == _INT) {
+                os << std::to_string($6->ival);
+            }
+            os << endl;
+        } else {
+            // os << getT();
+            // if ($6->dtype == _INT) {
+            //     os << "sipush " << std::to_string($6->ival);
+            // } else if ($6->dtype == _BOOL) {
+            //     os << "iconst_value_" << $6->bval ? "1" : "0";
+            // }
+            // os << endl;
+            // os << getT() << "istore " << stack_number++ << endl;
+            d->val->id = stack_number;
+            os << getT() << "istore " << stack_number << endl;
+            stack_number++;
+        }
     }
 	| VAR ID ':' type
     {
@@ -635,6 +733,14 @@ var_declaration:
         d->val = new SymbolValue();
         d->val->dtype = $4;
         insertSymbolEntry(d);
+        if (tables->inGlobal()) {
+            os << "\tfield static " << toDtypeString(d->val->dtype) << " " << *$2 << endl;
+        } else {
+            d->val->id = stack_number;
+            os << getT() << "sipush 0" << endl;
+            os << getT() << "istore " << stack_number << endl;
+            stack_number++;
+        }
     }
 	| VAR ID ':' type '[' CONST_INT ']'
     {
@@ -670,6 +776,17 @@ statement:
     | ID '=' expression
     {
         trace("statement id = expression");
+        SymbolEntry *d = tables->lookup(*$1, _VAR);
+        if (d == NULL) {
+            yyerror("undefined id");
+        }
+        trace($3->dtype);
+        if (d->val->dtype != $3->dtype) {
+            yyerror("statement assign without same type");
+        }
+        if ($3->type == _INT || $3->type == _BOOL) {
+            os << getT() << "istore " << stack_number++ << endl;
+        }
     }
     |
     '{'
@@ -695,10 +812,16 @@ statement:
     | PRINT expression
     {
         trace("statement print");
+        os << getT() << "getstatic java.io.PrintStream java.lang.System.out" << endl;
+        os << getT() << "invokevirtual void java.io.PrintStream.print(";
+        os << toDtypeString($2->dtype) << ")" << endl;
     }
     | PRINTLN expression
     {
         trace("statement println");
+        os << getT() << "getstatic java.io.PrintStream java.lang.System.out" << endl;
+        os << getT() << "invokevirtual void java.io.PrintStream.println(";
+        os << toDtypeString($2->dtype) << ")" << endl;
     }
     | READ expression
     {
@@ -711,6 +834,7 @@ statement:
     | RETURN expression
     {
         trace("statement return expression");
+        os << getT() << "ireturn" << endl;
     }
     ;
 
@@ -725,27 +849,48 @@ function_declaration:
     {
         trace("declare function: " + *$2);
         SymbolEntry *d = new SymbolEntry(*$2, _FUN);
+        d->return_dtype = -1;
         insertSymbolEntry(d);
         // function parameters
         d->formal_parameters = $4;
+        string return_type = "void";
+
+        // reset stack number
+        stack_number = 0;
+
+        // TODO
+        os << getT() << "method public static " << return_type << " " << *$2 << "(";
+        if (*$2 == "main" && $4->size() == 0) {
+            os << "java.lang.String[]";
+        } else {
+            for (size_t i = 0; i < $4->size(); i++) {
+                if (i != 0) {
+                    os << ", ";
+                }
+                os << toDtypeString($4->at(i)->val->dtype);
+            }
+        }
+        os << ")" << endl;
+        os << getT() << "max_stack 15" << endl << getT() << "max_locals 15" << endl;
+        os << getT() << "{" << endl;
+
         // push
         tables->pushTable();
         for (size_t i = 0; i < $4->size(); i++) {
             insertSymbolEntry($4->at(i));
         }
-        string return_type = "void";
-
-        // TODO
-        os << "\tmethod public static " << return_type << " " << *$2 << " " << endl;
-        os << "\tmax_stack 15" << endl << "\tmax_locals 15" << endl;
-        os << "\t{" << endl;
-        os << "\t}" << endl;
     }
     function_body
     {
         // dump and pop
+        os << getT() << "return" << endl;
         tables->dump();
         tables->popTable();
+        SymbolEntry *d = tables->lookup(*$2, _FUN);
+        if (d == NULL) {
+            yyerror("wrong function closing");
+        }
+        os << getT() << "}" << endl;
     }
     | FUN ID '(' function_parameters ')' ':' type
     {
@@ -754,6 +899,25 @@ function_declaration:
         insertSymbolEntry(d);
         // function paramters
         d->formal_parameters = $4;
+
+        // reset stack number
+        stack_number = 0;
+
+        os << getT() << "method public static " << toDtypeString($7) << " " << *$2 << "(";
+        if (*$2 == "main" && $4->size() == 0) {
+            os << "java.lang.String[]";
+        } else {
+            for (size_t i = 0; i < $4->size(); i++) {
+                if (i != 0) {
+                    os << ", ";
+                }
+                os << toDtypeString($4->at(i)->val->dtype);
+            }
+        }
+        os << ")" << endl;
+        os << getT() << "max_stack 15" << endl << getT() << "max_locals 15" << endl;
+        os << getT() << "{" << endl;
+
         // push
         tables->pushTable();
         for (size_t i = 0; i < $4->size(); i++) {
@@ -765,6 +929,7 @@ function_declaration:
         // dump and pop
         tables->dump();
         tables->popTable();
+        os << getT() << "}" << endl;
     }
     ;
 
@@ -796,6 +961,7 @@ function_parameter:
         d->type = _VAR;
         d->val = new SymbolValue;
         d->val->dtype = $3;
+        d->val->id = stack_number++;
         $$ = d;
     }
     ;
@@ -885,6 +1051,14 @@ void insertSymbolEntry(SymbolEntry *entry) {
     if (!tables->insert(entry)) {
         yyerror("error: insert symbol entry");
     }
+}
+
+string getT() {
+    string res = "";
+    for (size_t i = 0; i < tables->tables.size(); i++) {
+        res += "\t";
+    }
+    return res;
 }
 
 int main(int argc, char* argv[]) {

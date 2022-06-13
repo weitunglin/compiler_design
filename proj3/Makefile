@@ -8,7 +8,7 @@ SYMBOL_TABLE_SOURCE = symbolTable.cpp
 all: compile
 
 compile: yacc lex $(SYM_TABLE_SOURCE)
-	$(CC) y.tab.cpp $(SYM_TABLE_SOURCE) -o parser $(CFLAG)
+	$(CC) y.tab.cpp $(SYM_TABLE_SOURCE) -o compiler $(CFLAG)
 
 yacc: $(YACC_SOURCE)
 	yacc -d -t -v $(YACC_SOURCE) -o y.tab.cpp
@@ -23,4 +23,4 @@ clean:
 	- rm -f *.o
 	- rm -f lex.yy.*
 	- rm -f *.output
-	- rm -f parser
+	- rm -f compiler
