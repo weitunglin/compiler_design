@@ -21,7 +21,8 @@ class fib
     }
     
     // print result
-    print ("Result of computation: ")
+    println ("Result of computation: ")
+    println (Fn)
     println (n)
   }
 }

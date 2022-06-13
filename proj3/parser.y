@@ -1,6 +1,6 @@
 %{
 // option for print trace output
-#define DEBUG 1
+#define DEBUG 0
 // print trace output
 #define trace(t) if (DEBUG) { cout << "trace: " << t << endl; }
 
@@ -280,7 +280,6 @@ expression:
         $$ = d;
         layers.push(++last_index);
         os << getT() << "isub" << endl;
-        layers.push(++last_index);
         os << getT() << "ifgt L_" << layers.top() << endl;
         os << getT() << "iconst_0" << endl;
         os << getT() << "goto L_" << layers.top() << "_end" << endl;
@@ -315,7 +314,6 @@ expression:
         $$ = d;
         layers.push(++last_index);
         os << getT() << "isub" << endl;
-        layers.push(++last_index);
         os << getT() << "iflt L_" << layers.top() << endl;
         os << getT() << "iconst_0" << endl;
         os << getT() << "goto L_" << layers.top() << "_end" << endl;

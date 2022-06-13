@@ -1,5 +1,0 @@
-class nomain {
-    fun n () {
-        
-    }
-}
