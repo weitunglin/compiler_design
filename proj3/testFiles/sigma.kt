@@ -13,7 +13,6 @@ class Sigma
   fun main () {
     sum = 0
     index = 0
-    var d: int
     
     while (index <= n) {
       sum = sum + index

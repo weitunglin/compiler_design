@@ -60,9 +60,6 @@ void insertSymbolEntry(SymbolEntry* entry);
 %left '+' '-'
 %left '*' '/'
 
-// debug options
-%debug
-%error-verbose
 // entrypoint
 %start program
 %%
@@ -445,7 +442,18 @@ var_declarations:
     ;
 
 var_declaration:
-    VAR ID '=' expression
+    VAR ID
+    {
+        trace("var decalaration with value");
+        SymbolEntry *d;
+        d = tables->lookup(*$2, _ALL);
+        if (d != NULL) {
+            yyerror("duplicate id");
+        }
+        d = new SymbolEntry(*$2, _VAR);
+        insertSymbolEntry(d);
+    }
+    | VAR ID '=' expression
     {
         trace("var decalaration with value");
         SymbolEntry *d;
@@ -584,6 +592,9 @@ function_declaration:
         d->formal_parameters = $4;
         // push
         tables->pushTable();
+        for (size_t i = 0; i < $4->size(); i++) {
+            insertSymbolEntry($4->at(i));
+        }
     }
     function_body
     {
@@ -600,6 +611,9 @@ function_declaration:
         d->formal_parameters = $4;
         // push
         tables->pushTable();
+        for (size_t i = 0; i < $4->size(); i++) {
+            insertSymbolEntry($4->at(i));
+        }
     }
     function_body
     {
@@ -634,6 +648,7 @@ function_parameter:
         trace("function param: " + *$1 + ", type: " + std::to_string($3));
         SymbolEntry *d = new SymbolEntry;
         d->name = *$1;
+        d->type = _VAR;
         d->val = new SymbolValue;
         d->val->dtype = $3;
         $$ = d;
