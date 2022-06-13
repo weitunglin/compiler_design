@@ -1,0 +1,6 @@
+*.o
+parser
+y.tab.*
+lex.yy.*
+*.output
+.DS_Store
