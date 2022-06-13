@@ -24,3 +24,4 @@ clean:
 	- rm -f lex.yy.*
 	- rm -f *.output
 	- rm -f compiler
+	- rm -f *.class

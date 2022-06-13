@@ -186,6 +186,7 @@ public:
             t.push_back(top);
             tables.pop();
         }
+        top->dump();
         result = top->lookup(name, type);
         while (!t.empty()) {
             tables.push(t.back());

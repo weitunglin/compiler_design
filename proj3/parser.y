@@ -137,9 +137,7 @@ expression:
         if (d1->val->dtype != d->dtype) {
             yyerror("assign without same type");
         }
-        
-        d1 = tables->lookup(*$1, _VAR, true);
-        if (d1 != NULL) {
+        if (tables->lookup(*$1, _VAR, true)) {
             // global var
             os << getT() << "putstatic " << toDtypeString($3->return_dtype) << " " << class_name << "." << *$1 << endl;
         } else {
@@ -280,6 +278,7 @@ expression:
             yyerror("> with wrong dtype");
         }
         $$ = d;
+        layers.push(++last_index);
         os << getT() << "isub" << endl;
         layers.push(++last_index);
         os << getT() << "ifgt L_" << layers.top() << endl;
@@ -288,6 +287,7 @@ expression:
         os << "L_" << layers.top() << ":" << endl;
         os << getT() << "iconst_1" << endl;
         os << "L_" << layers.top() << "_end:" << endl;
+        layers.pop();
     }
     | expression '<' expression
     {
@@ -313,6 +313,16 @@ expression:
             yyerror("< with wrong dtype");
         }
         $$ = d;
+        layers.push(++last_index);
+        os << getT() << "isub" << endl;
+        layers.push(++last_index);
+        os << getT() << "iflt L_" << layers.top() << endl;
+        os << getT() << "iconst_0" << endl;
+        os << getT() << "goto L_" << layers.top() << "_end" << endl;
+        os << "L_" << layers.top() << ":" << endl;
+        os << getT() << "iconst_1" << endl;
+        os << "L_" << layers.top() << "_end:" << endl;
+        layers.pop();
     }
     | expression '=' expression
     {
@@ -346,6 +356,15 @@ expression:
             yyerror(">= with wrong dtype");
         }
         $$ = d;
+        layers.push(++last_index);
+        os << getT() << "isub" << endl;
+        os << getT() << "ifge L_" << layers.top() << endl;
+        os << getT() << "iconst_0" << endl;
+        os << getT() << "goto L_" << layers.top() << "_end" << endl;
+        os << "L_" << layers.top() << ":" << endl;
+        os << getT() << "iconst_1" << endl;
+        os << "L_" << layers.top() << "_end:" << endl;
+        layers.pop();
     }
     | expression LE expression
     {
@@ -368,6 +387,15 @@ expression:
             yyerror("<= with wrong dtype");
         }
         $$ = d;
+        layers.push(++last_index);
+        os << getT() << "isub" << endl;
+        os << getT() << "ifle L_" << layers.top() << endl;
+        os << getT() << "iconst_0" << endl;
+        os << getT() << "goto L_" << layers.top() << "_end" << endl;
+        os << "L_" << layers.top() << ":" << endl;
+        os << getT() << "iconst_1" << endl;
+        os << "L_" << layers.top() << "_end:" << endl;
+        layers.pop();
     }
     | expression EQ expression
     {
@@ -393,6 +421,15 @@ expression:
             yyerror("== with wrong dtype");
         }
         $$ = d;
+        layers.push(++last_index);
+        os << getT() << "isub" << endl;
+        os << getT() << "ifeq L_" << layers.top() << endl;
+        os << getT() << "iconst_0" << endl;
+        os << getT() << "goto L_" << layers.top() << "_end" << endl;
+        os << "L_" << layers.top() << ":" << endl;
+        os << getT() << "iconst_1" << endl;
+        os << "L_" << layers.top() << "_end:" << endl;
+        layers.pop();
     }
     | expression NE expression
     {
@@ -421,6 +458,14 @@ expression:
             yyerror("!= with wrong dtype");
         }
         $$ = d;
+        layers.push(++last_index);
+        os << getT() << "ifeq L_" << layers.top() << endl;
+        os << getT() << "iconst_1" << endl;
+        os << getT() << "goto L_" << layers.top() << "_end" << endl;
+        os << "L_" << layers.top() << ":" << endl;
+        os << getT() << "iconst_0" << endl;
+        os << "L_" << layers.top() << "_end:" << endl;
+        layers.pop();
     }
     | expression ADDE expression
     {
@@ -785,8 +830,12 @@ statement:
         if (d->val->dtype != $3->dtype) {
             yyerror("statement assign without same type");
         }
-        if ($3->type == _INT || $3->type == _BOOL) {
-            os << getT() << "istore " << stack_number++ << endl;
+        if (tables->lookup(*$1, _VAR, true)) {
+            // global var
+            os << getT() << "putstatic " << toDtypeString($3->dtype) << " " << class_name << "." << *$1 << endl;
+        } else {
+            // local var
+            os << getT() << "istore " << std::to_string(d->val->id) << endl;
         }
     }
     |
@@ -1034,13 +1083,32 @@ condition_body:
 
 // loop
 loop:
-    WHILE '(' expression ')'
+    WHILE
+    {
+        layers.push(++last_index);
+        os << "L_" << layers.top() << "_begin:" << endl;
+    } '(' expression ')'
     {
         trace("loop while");
+        if ($4->dtype != _BOOL) {
+            yyerror("while loop wrong type");
+        }
+        os << getT() << "ifeq L_" << layers.top() << "_end" << endl;
+        tables->pushTable();
     }
     '{'
     statements
     '}'
+    {
+        tables->dump();
+        tables->popTable();
+        // goto beginning of the loop
+        os << getT() << "goto L_" << layers.top() << "_begin" << endl;
+        // end entry of loop
+        os << "L_" << layers.top() << "_end:" << endl;
+        os << getT() << "nop" << endl;
+        layers.pop();
+    }
     |
     FOR '(' ID IN expression RANGE expression ')'
     {
