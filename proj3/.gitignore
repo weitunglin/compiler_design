@@ -4,3 +4,6 @@ y.tab.*
 lex.yy.*
 *.output
 .DS_Store
+*.jasm
+*.class
+javaa/**

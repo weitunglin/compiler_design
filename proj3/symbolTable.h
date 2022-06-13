@@ -2,6 +2,7 @@
 #define SYMBOL_TABLE_H
 
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <stack>
 #include <vector>
@@ -17,6 +18,7 @@ using std::string;
 using std::stack;
 using std::vector;
 using std::map;
+using std::ofstream;
 
 const int _INT = 0;
 const int _FLOAT = 1;
@@ -29,6 +31,19 @@ const int _VAR = 1;
 const int _ARRAY = 2;
 const int _FUN = 3;
 const int _CLASS = 4;
+
+string toDtypeString(int t) {
+    if (t == _INT) {
+        return "INT";
+    } else if (t == _FLOAT) {
+        return "FLOAT";
+    } else if (t == _BOOL) {
+        return "BOOL";
+    } else if (t == _STRING) {
+        return "STRING";
+    }
+    return "";
+}
 
 string toTypeString(int t) {
     if (t == 0) {
@@ -50,13 +65,14 @@ public:
     int ival;
     bool bval;
     float fval;
-    char cval;
     string *sval;
 
     int dtype;
     int type;
 
     SymbolValue() {}
+    SymbolValue(const SymbolValue& rhs) : dtype(rhs.dtype), type(rhs.type),
+    ival(rhs.ival), bval(rhs.bval), fval(rhs.fval), sval(rhs.sval) {}
     SymbolValue(int d, int t, int v) : dtype(d), type(t), ival(v) {}
     SymbolValue(int d, int t, bool v) : dtype(d), type(t), bval(v) {}
     SymbolValue(int d, int t, float v) : dtype(d), type(t), fval(v) {}
@@ -107,8 +123,11 @@ public:
         for (const auto &i : table) {
             cout
                 << "name: " << i.first << "\t"
-                << "type: " << toTypeString(i.second->type)
-                << endl;
+                << "type: " << toTypeString(i.second->type);
+            if (i.second->type == _VAR && i.second->val != nullptr) {
+                cout << "\t" << "dtype: " << toDtypeString(i.second->val->dtype);
+            }
+            cout << endl;
         }
     }
 };

@@ -24,8 +24,23 @@ class Sigma
   }
 
   val q = 5
+  var a
+
+  // function declaration
+  fun add (a: int, b: int) : int {
+    return a+b
+  }
 
   fun t() {
+    if (true)
+      print ("not valid")
+    else
+      print ("else")
     
+    var c = add(n, 10)
+    if (c > 10)
+      print -c
+    else
+      print c
   }
 }

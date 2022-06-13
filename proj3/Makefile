@@ -1,5 +1,5 @@
 CC = g++
-CFLAG = -ll -std=c++11 -DYYDEBUG
+CFLAG = -ll -DDEBUG -g -std=c++11 -DYYDEBUG
 
 LEX_SOURCE = scanner.l
 YACC_SOURCE = parser.y

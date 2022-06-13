@@ -10,6 +10,8 @@
 // entire symbol tables
 SymbolTables *tables = new SymbolTables();
 
+ofstream os;
+
 // parsing error and exit
 void yyerror(string);
 // inserting symbol into symbol tables
@@ -51,6 +53,7 @@ void insertSymbolEntry(SymbolEntry* entry);
 %type <formal_parameters> function_parameters
 %type <formal_parameter> function_parameter
 %type <function_arguments> function_arguments
+%type <entry> function_call
 
 // opeartor precedence
 %left '|'
@@ -69,9 +72,10 @@ program:
     {
         trace("declare class: " + *$2);
         insertSymbolEntry(new SymbolEntry(*$2, _CLASS));
+        os << "class " << *$2 << endl << "{" << endl;
     }
-    '{'
-    program_body
+    '{'program_body
+    
     '}'
     {
         // find main function entry
@@ -81,6 +85,7 @@ program:
         // pop symbol table
         tables->dump();
         tables->popTable();
+        os << "}" << endl;
     }
     ;
 
@@ -95,7 +100,7 @@ expression:
     literal
     {
         trace("expression literal");
-        $$ = $1;
+        $$ = new SymbolValue(*$1);
     }
     | ID '=' function_call
     {
@@ -104,6 +109,14 @@ expression:
         if (d1 == NULL) {
             yyerror("undefined id");
         }
+        SymbolValue *d = new SymbolValue();
+        d->dtype = $3->return_dtype;
+        d->type = _VAR;
+        if (d1->val->dtype != d->dtype) {
+            yyerror("assign without same type");
+        }
+        // TODO assign value to d1
+        $$ = d;
     }
     | function_call
     {
@@ -236,10 +249,52 @@ expression:
     | expression '>' expression
     {
         trace("expression > expression");
+        SymbolValue *d = new SymbolValue();
+        if ($1->dtype != $3->dtype) {
+            yyerror("> without same dtype");
+        }
+        d->dtype = _BOOL;
+        if ($1->dtype == _INT) {
+            if ($1->ival > $3->ival) {
+                d->bval = true;
+            } else {
+                d->bval = false;
+            }
+        } else if ($1->dtype == _BOOL) {
+            if ($1->bval > $3->bval) {
+                d->bval = true;
+            } else {
+                d->bval = false;
+            }
+        } else {
+            yyerror("> with wrong dtype");
+        }
+        $$ = d;
     }
     | expression '<' expression
     {
         trace("expression < expression");
+        SymbolValue *d = new SymbolValue();
+        if ($1->dtype != $3->dtype) {
+            yyerror("< without same dtype");
+        }
+        d->dtype = _BOOL;
+        if ($1->dtype == _INT) {
+            if ($1->ival < $3->ival) {
+                d->bval = true;
+            } else {
+                d->bval = false;
+            }
+        } else if ($1->dtype == _BOOL) {
+            if ($1->bval < $3->bval) {
+                d->bval = true;
+            } else {
+                d->bval = false;
+            }
+        } else {
+            yyerror("< with wrong dtype");
+        }
+        $$ = d;
     }
     | expression '=' expression
     {
@@ -247,6 +302,10 @@ expression:
         if ($1->dtype != $3->dtype) {
             yyerror("assignment type mismatched");
         }
+        SymbolValue *d = new SymbolValue();
+        d->dtype = $1->dtype;
+        // assign value
+        $$ = d;
     }
     | expression GE expression
     {
@@ -254,6 +313,21 @@ expression:
         if ($1->dtype != $3->dtype) {
             yyerror("assignment type mismatched");
         }
+        SymbolValue *d = new SymbolValue();
+        if ($1->dtype != $3->dtype) {
+            yyerror(">= without same dtype");
+        }
+        d->dtype = _BOOL;
+        if ($1->dtype == _INT) {
+            if ($1->ival >= $3->ival) {
+                d->bval = true;
+            } else {
+                d->bval = false;
+            }
+        } else {
+            yyerror(">= with wrong dtype");
+        }
+        $$ = d;
     }
     | expression LE expression
     {
@@ -261,10 +335,46 @@ expression:
         if ($1->dtype != $3->dtype) {
             yyerror("assignment type mismatched");
         }
+        SymbolValue *d = new SymbolValue();
+        if ($1->dtype != $3->dtype) {
+            yyerror("<= without same dtype");
+        }
+        d->dtype = _BOOL;
+        if ($1->dtype == _INT) {
+            if ($1->ival <= $3->ival) {
+                d->bval = true;
+            } else {
+                d->bval = false;
+            }
+        } else {
+            yyerror("<= with wrong dtype");
+        }
+        $$ = d;
     }
     | expression EQ expression
     {
         trace("expression == expression");
+        SymbolValue *d = new SymbolValue();
+        if ($1->dtype != $3->dtype) {
+            yyerror("== without same dtype");
+        }
+        d->dtype = _BOOL;
+        if ($1->dtype == _INT) {
+            if ($1->ival == $3->ival) {
+                d->bval = true;
+            } else {
+                d->bval = false;
+            }
+        } else if ($1->dtype == _BOOL) {
+            if ($1->bval == $3->bval) {
+                d->bval = true;
+            } else {
+                d->bval = false;
+            }
+        } else {
+            yyerror("== with wrong dtype");
+        }
+        $$ = d;
     }
     | expression NE expression
     {
@@ -272,6 +382,27 @@ expression:
         if ($1->dtype != $3->dtype) {
             yyerror("assignment type mismatched");
         }
+        SymbolValue *d = new SymbolValue();
+        if ($1->dtype != $3->dtype) {
+            yyerror("!= without same dtype");
+        }
+        d->dtype = _BOOL;
+        if ($1->dtype == _INT) {
+            if ($1->ival != $3->ival) {
+                d->bval = true;
+            } else {
+                d->bval = false;
+            }
+        } else if ($1->dtype == _BOOL) {
+            if ($1->bval != $3->bval) {
+                d->bval = true;
+            } else {
+                d->bval = false;
+            }
+        } else {
+            yyerror("!= with wrong dtype");
+        }
+        $$ = d;
     }
     | expression ADDE expression
     {
@@ -304,10 +435,23 @@ expression:
     | '-' expression
     {
         trace("- expression");
+        if ($2->dtype != _INT) {
+            yyerror("- expression not INT");
+        }
+        $$ = new SymbolValue(_INT, _VAR, -$2->ival);
     }
     | '+' expression
     {
         trace("+ expression");
+        if ($2->dtype != _INT) {
+            yyerror("- expression not INT");
+        }
+        $$ = new SymbolValue(_INT, _VAR, abs($2->ival));
+    }
+    | '(' expression ')'
+    {
+        trace("( expression )");
+        $$ = $2;
     }
     ;
 
@@ -374,6 +518,8 @@ function_call:
                 yyerror("mismatched parameter dtype");
             }
         }
+        
+        $$ = d;
     }
     ;
 
@@ -554,14 +700,6 @@ statement:
     {
         trace("statement println");
     }
-    | PRINT '(' expression ')'
-    {
-        trace("statement print");
-    }
-    | PRINTLN '(' expression ')'
-    {
-        trace("statement println");
-    }
     | READ expression
     {
         trace("statement read");
@@ -595,6 +733,13 @@ function_declaration:
         for (size_t i = 0; i < $4->size(); i++) {
             insertSymbolEntry($4->at(i));
         }
+        string return_type = "void";
+
+        // TODO
+        os << "\tmethod public static " << return_type << " " << *$2 << " " << endl;
+        os << "\tmax_stack 15" << endl << "\tmax_locals 15" << endl;
+        os << "\t{" << endl;
+        os << "\t}" << endl;
     }
     function_body
     {
@@ -669,15 +814,30 @@ function_body_block:
 
 // condition
 condition:
-    IF '(' expression ')'
+    IF expression
+    {
+        // check if the expression if boolean expression
+        trace($2->dtype);
+        trace($2->type);
+        if (!($2->dtype == _BOOL)) {
+            yyerror("condition without bool expression");
+        }
+    }
     condition_body
     ELSE
     condition_body
     {
         trace("condition if else");
     }
-    | 
-    IF '(' expression ')'
+    | IF expression
+    {
+        // check if the expression if boolean expression
+        trace($2->dtype);
+        trace($2->type);
+        if (!($2->dtype == _BOOL)) {
+            yyerror("condition without bool expression");
+        }
+    }
     condition_body
     {
         trace("condition if");
@@ -737,10 +897,20 @@ int main(int argc, char* argv[]) {
         printf("Usage: ./parser filename\n");
         exit(1);
     }
+
+    string filename(argv[1]);
+    size_t dot_pos = filename.find_last_of(".");
+    os.open(filename.substr(0, dot_pos) + ".jasm");
+    if (!os.is_open()) {
+        yyerror("can not open jasm for generating");
+        exit(1);
+    }
     
     /* perform parsing */
     if (yyparse() == 1)
         yyerror("Parsing error !");
     else
         cout << "Parsed succeed!" << endl;
+    
+    os.close();
 }
